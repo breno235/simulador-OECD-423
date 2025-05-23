@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Simulador OECD 423</title>
+    <style>
+        .rato {
+            font-size: 28px;
+            margin: 5px;
+            display: inline-block;
+            text-align: center;
+            width: 50px;
+            cursor: pointer;
+        }
+        .usado {
+            color: gray;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+        .selecionado {
+            border: 2px solid blue;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simulador de Toxicidade - OECD 423</h1>
+
+    <h3>Selecione um rato para o teste:</h3>
+    <div id="ratos">
+        {% for i in range(1, 31) %}
+            <div class="rato {% if i in usados %}usado{% endif %}" id="rato{{ i }}" onclick="selecionarRato({{ i }})">
+                🐭<br>{{ i }}
+            </div>
+        {% endfor %}
+    </div>
+
+    <form id="simulador-form">
+        <input type="hidden" id="animal" name="animal">
+        <label for="substancia">Substância:</label>
+        <select id="substancia" name="substancia"></select><br><br>
+
+        <label for="dose">Dose (mg/kg):</label>
+        <select id="dose" name="dose">
+            <option value="5">5</option>
+            <option value="50">50</option>
+            <option value="300">300</option>
+            <option value="2000">2000</option>
+        </select><br><br>
+
+        <button type="submit" disabled id="btnSimular">Simular</button>
+        <button type="button" onclick="exportarResultados()">Exportar Resultados</button>
+        <button type="button" onclick="limparResultados()">Limpar Histórico</button>
+    </form>
+
+    <h2>Resultado:</h2>
+    <div id="resultado"></div>
+
+   <script>
+    let ratoSelecionado = null;
+
+    function selecionarRato(num) {
+        const ratoEl = document.getElementById("rato" + num);
+        if (ratoEl.classList.contains("usado")) return;
+
+        if (ratoSelecionado !== null) {
+            document.getElementById("rato" + ratoSelecionado).classList.remove("selecionado");
+        }
+
+        ratoSelecionado = num;
+        document.getElementById("animal").value = num;
+        document.getElementById("btnSimular").disabled = false;
+        ratoEl.classList.add("selecionado");
+    }
+
+    async function carregarSubstancias() {
+        const resposta = await fetch('/substancias');
+        const substancias = await resposta.json();
+        const seletor = document.getElementById('substancia');
+        substancias.forEach(nome => {
+            const opt = document.createElement('option');
+            opt.value = nome;
+            opt.textContent = nome;
+            seletor.appendChild(opt);
+        });
+    }
+
+    async function exportarResultados() {
+        const resposta = await fetch('/exportar');
+        const blob = await resposta.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'resultados_teste.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    async function limparResultados() {
+        await fetch('/limpar');
+        alert("Histórico limpo.");
+        location.reload();
+    }
+
+    document.getElementById('simulador-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const substancia = document.getElementById('substancia').value;
+        const dose = document.getElementById('dose').value;
+        const animal = document.getElementById('animal').value;
+        const resposta = await fetch(`/simular?substancia=${substancia}&dose=${dose}&animal=${animal}`);
+        const dados = await resposta.json();
+
+        let imagem = "";
+        if (dados.Resultado === "Rato vivo") imagem = "🐭 (vivo)";
+        else if (dados.Resultado === "Rato levemente intoxicado") imagem = "😐🐭 (leve)";
+        else if (dados.Resultado === "Rato gravemente intoxicado") imagem = "🤢🐭 (grave)";
+        else if (dados.Resultado === "Rato morto") imagem = "💀🐭 (morto)";
+
+        const estrutura = `<img src='https://pubchem.ncbi.nlm.nih.gov/image/imagefly.cgi?cid=${dados.cid}&width=200&height=200' alt='estrutura'>`;
+
+        document.getElementById('resultado').innerHTML = `
+            <p><strong>Animal:</strong> ${dados.animal}</p>
+            <p><strong>Substância:</strong> ${dados.substancia}</p>
+            <p><strong>Dose:</strong> ${dados.dose} mg/kg</p>
+            <p><strong>Resultado:</strong> ${dados.Resultado} ${imagem}</p>
+            ${estrutura}
+        `;
+
+        const ratoDiv = document.getElementById("rato" + animal);
+        ratoDiv.innerHTML = "❌<br>" + animal;
+        ratoDiv.classList.add("usado");
+        ratoDiv.classList.remove("selecionado");
+        ratoDiv.style.pointerEvents = "none";
+
+        document.getElementById("btnSimular").disabled = true;
+        ratoSelecionado = null;
+    });
+
+    carregarSubstancias();
+</script>
+
+</body>
+</html>
