@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, request, jsonify, send_file, render_template_string
 from math import exp
 import os
 import json
@@ -8,6 +8,7 @@ app = Flask(__name__)
 HISTORICO_ARQUIVO = "resultados_teste.txt"
 USADOS_ARQUIVO = "ratos_usados.json"
 
+# Carrega ratos usados
 if os.path.exists(USADOS_ARQUIVO):
     with open(USADOS_ARQUIVO, "r") as f:
         USADOS = set(json.load(f))
@@ -44,7 +45,7 @@ def avaliar_resultado(letalidade):
 def registrar_resultado(animal, substancia, dose, resultado):
     USADOS.add(int(animal))
     with open(HISTORICO_ARQUIVO, "a", encoding="utf-8") as f:
-        f.write(f"Teste: Rato {animal} | Substância: {substancia} | Dose: {dose} mg/kg | Resultado: {resultado}\n")
+        f.write(f"Rato {animal} | Substância: {substancia} | Dose: {dose} mg/kg | Resultado: {resultado}\n")
     with open(USADOS_ARQUIVO, "w", encoding="utf-8") as f:
         json.dump(list(USADOS), f)
 
@@ -66,9 +67,12 @@ def simular_teste(animal, substancia, dose):
 
 @app.route("/")
 def index():
-    return render_template("index.html", usados=list(USADOS))
+    with open(USADOS_ARQUIVO, "r") if os.path.exists(USADOS_ARQUIVO) else open(os.devnull, "w") as f:
+        usados = list(USADOS)
+    html = open("index.html", encoding="utf-8").read()
+    return render_template_string(html, usados=usados)
 
-@app.route("/simular", methods=["GET"])
+@app.route("/simular")
 def simular():
     substancia = request.args.get("substancia")
     animal = request.args.get("animal")
@@ -79,13 +83,13 @@ def simular():
     resultado = simular_teste(animal, substancia, dose)
     return jsonify(resultado)
 
-@app.route("/exportar", methods=["GET"])
+@app.route("/exportar")
 def exportar():
     if os.path.exists(HISTORICO_ARQUIVO):
         return send_file(HISTORICO_ARQUIVO, as_attachment=True)
     return "Nenhum resultado registrado ainda."
 
-@app.route("/limpar", methods=["GET"])
+@app.route("/limpar")
 def limpar():
     if os.path.exists(HISTORICO_ARQUIVO):
         os.remove(HISTORICO_ARQUIVO)
@@ -94,7 +98,7 @@ def limpar():
     USADOS.clear()
     return "Histórico apagado."
 
-@app.route("/substancias", methods=["GET"])
+@app.route("/substancias")
 def listar_substancias():
     return jsonify(list(define_substances().keys()))
 
